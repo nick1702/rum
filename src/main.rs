@@ -1,3 +1,44 @@
+enum Opcode {
+  CMov = 0,
+  SegLoad = 1,
+  SegStore = 2,
+  Add = 3,
+  Mult = 4,
+  Div = 5,
+  BitNAND = 6,
+  Halt = 7,
+  MapSeg = 8,
+  UnmapSeg = 9,
+  Output = 10,
+  Input = 11,
+  LoadProg = 12,
+  LoadVal = 13,
+}
+
+impl Opcode {
+  fn from_u32(value: u32) -> Option<Self> {
+      match value {
+          0 => Some(Opcode::CMov),
+          1 => Some(Opcode::SegLoad),
+          2 => Some(Opcode::SegStore),
+          3 => Some(Opcode::Add),
+          4 => Some(Opcode::Mult),
+          5 => Some(Opcode::Div),
+          6 => Some(Opcode::BitNAND),
+          7 => Some(Opcode::Halt),
+          8 => Some(Opcode::MapSeg),
+          9 => Some(Opcode::UnmapSeg),
+          10 => Some(Opcode::Output),
+          11 => Some(Opcode::Input),
+          12 => Some(Opcode::LoadProg),
+          13 => Some(Opcode::LoadVal),
+          _ => None,
+      }
+  }
+}
+  
+  
+  
   // Opcode: 0
   fn CMov(A: mut &u32, B: &u32, C: &u32){
     // if C != 0, then A = B
