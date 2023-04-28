@@ -1,3 +1,5 @@
+ use std::fs::File;
+
 enum Opcode {
   CMov = 0,
   SegLoad = 1,
@@ -124,7 +126,7 @@ impl Opcode {
   // Reads Through Vec of u32s and executes the instructions
   fn execute_program(program: Vec<u32>){
     let mut counter = 0;
-    let mut registers = [0; 8];
+    let mut registers:Vec<mut u32> = vec![0; 8];
 
     while counter < program.len() {
       let instruction = program[counter];
@@ -154,3 +156,16 @@ impl Opcode {
       counter += 1;
     }
   }
+
+    fn main() {
+        let mut program: Vec<u32> = Vec::new();
+        let mut input = String::new();
+        let mut file = File::open("challenge.bin").expect("Error: File not found");
+        file.read_to_string(&mut input).expect("Error: Unable to read file");
+        let mut words = input.split_whitespace();
+        for word in words {
+        let word = u32::from_str_radix(word, 2).unwrap();
+        program.push(word);
+        }
+        execute_program(program);
+    }
