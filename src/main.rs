@@ -52,7 +52,7 @@ fn seg_load(b: u32, c: u32, mem: &mut [Vec<u32>]) -> u32 {
 }
 
 fn seg_store(a: u32, b: u32, c: u32, mem: &mut [Vec<u32>]) {
-    mem[b as usize][c as usize] = a;
+    mem[a as usize][b as usize] = c;
 }
 
 fn add(b: u32, c: u32) -> u32 {
@@ -104,7 +104,13 @@ fn input_opp(stdin: &io::Stdin, c: &mut u32) {
         input.pop();
     }
     if let Some(ch) = input.chars().next() {
-        *c = ch as u32;
+        let num = ch as u32;
+        if num <= 255 {
+            *c = num;
+        }
+        else{
+            *c = 4294967295     //Is this right?
+        }
     }
 }
 
