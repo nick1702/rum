@@ -3,6 +3,53 @@ use std::io;
 
 use rum::rumload;
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+
+pub struct Segment {
+    pub memory: Vec<u32>,
+}
+
+pub struct SegmentManager {
+    segments: HashMap<u32, Segment>,
+    unmapped_ids: Vec<u32>,
+    next_id: AtomicU32,
+}
+
+impl SegmentManager {
+    pub fn new() -> Self {
+        SegmentManager {
+            segments: HashMap::new(),
+            unmapped_ids: Vec::new(),
+            next_id: AtomicU32::new(0),
+        }
+    }
+
+    pub fn allocate_segment(&mut self, size: usize) -> u32 {
+        let id = if let Some(reused_id) = self.unmapped_ids.pop() {
+            reused_id
+        } else {
+            let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
+            next_id
+        };
+        self.segments.insert(id, Segment { memory: vec![0; size] });
+        id
+    }
+
+    pub fn deallocate_segment(&mut self, id: u32) {
+        if self.segments.remove(&id).is_some() {
+            self.unmapped_ids.push(id);
+        }
+    }
+
+    pub fn get_segment_mut(&mut self, id: u32) -> Option<&mut Segment> {
+        self.segments.get_mut(&id)
+    }
+}
+
+
+
 enum Opcode {
   CMov = 0,
   SegLoad = 1,
@@ -47,13 +94,28 @@ fn cmov(b: u32) -> u32 {
     return b;
 }
 
-fn seg_load(b: u32, c: u32, mem: &mut [Vec<u32>]) -> u32 {
-    return mem[b as usize][c as usize];
+fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
+    if let Some(segment) = segment_manager.get_segment_mut(b) {
+        if c as usize >= segment.memory.len() {
+            panic!("Error: Segmented load out of bounds");
+        }
+        segment.memory[c as usize]
+    } else {
+        panic!("Error: Segmented load with unmapped segment");
+    }
 }
 
-fn seg_store(a: u32, b: u32, c: u32, mem: &mut [Vec<u32>]) {
-    mem[a as usize][b as usize] = c;
+fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
+    if let Some(segment) = segment_manager.get_segment_mut(a) {
+        if b as usize >= segment.memory.len() {
+            panic!("Error: Segmented store out of bounds");
+        }
+        segment.memory[b as usize] = c;
+    } else {
+        panic!("Error: Segmented store with unmapped segment");
+    }
 }
+
 
 fn add(b: u32, c: u32) -> u32 {
     return b + c;
@@ -75,22 +137,25 @@ fn halt() {
     std::process::exit(0);
 }
 
-fn map_seg(c: u32, mem: &mut Vec<Vec<u32>>) -> u32 {
-    let new_seg = vec![0; c as usize];
-    let unique_bit_pattern = mem.len() as u32;
-    mem.push(new_seg);
-    return unique_bit_pattern;
+fn map_seg(c: u32, segment_manager: &mut SegmentManager) -> u32 {
+    segment_manager.allocate_segment(c as usize)
 }
 
-fn unmap_seg(c: u32, mem: &mut Vec<Vec<u32>>) {
-    mem[c as usize] = vec![];
+fn unmap_seg(c: u32, segment_manager: &mut SegmentManager) {
+    if c == 0 {
+        panic!("Error: Attempt to unmap $m[0]");
+    }
+    if !segment_manager.segments.contains_key(&c) {
+        panic!("Error: Attempt to unmap an unmapped segment");
+    }
+    segment_manager.deallocate_segment(c);
 }
 
 fn output_opp(c: u32, stdout: &mut dyn io::Write) {
     if c <= 255 {
         stdout.write(&[c as u8]).unwrap();
     } else {
-        println!("Error: C is not a valid ASCII character");
+        println!("Error: {} is not a valid ASCII character", c);
     }
 }
 
@@ -114,19 +179,31 @@ fn input_opp(stdin: &io::Stdin, c: &mut u32) {
     }
 }
 
-fn load_prog(b: u32, c: u32, mem: &mut Vec<Vec<u32>>, _registers: &mut [u32; 8], counter: &mut usize) {
-    mem[0] = mem[b as usize].clone();
-    *counter = mem[0][c as usize] as usize;
+
+fn load_prog(
+    b: u32,
+    c: u32,
+    segment_manager: &mut SegmentManager,
+    _registers: &mut [u32; 8],
+    counter: &mut usize,
+) {
+    let source_segment_memory = {
+        let source_segment = segment_manager.get_segment_mut(b).unwrap();
+        source_segment.memory.clone()
+    };
+
+    if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
+        zero_segment.memory = source_segment_memory;
+    }
+
+    *counter = segment_manager.get_segment_mut(0).unwrap().memory[c as usize] as usize;
 }
 
-fn load_val(a: &mut u32, word: u32) {
-    *a = word;
-}
 
 
 fn execute_program(
     program: Vec<u32>,
-    mem: &mut Vec<Vec<u32>>,
+    segment_manager: &mut SegmentManager,
     _input: &dyn io::Read,
     output: &mut dyn io::Write,
     counter: &mut usize,
@@ -135,28 +212,36 @@ fn execute_program(
     let stdin = io::stdin();
 
     while *counter < program.len() {
+        // println!("current word is {:#b}", program[*counter]);
         let opcode = program[*counter] >> 28;
-        let reg_a = ((program[*counter] >> 6) & 7) as usize;
-        let reg_b = ((program[*counter] >> 3) & 7) as usize;
-        let reg_c = (program[*counter] & 7) as usize;
-        *counter += 1;
+        if opcode == 13{
+            registers[((program[*counter] << 4) >> 29) as usize] = (program[*counter] << 7) >> 7;
+            *counter += 1;
+        } else {
+            let reg_a = ((program[*counter] >> 6) & 7) as usize;
+            let reg_b = ((program[*counter] >> 3) & 7) as usize;
+            let reg_c = (program[*counter] & 7) as usize;
+            // println!("opcode: {:#b}, reg_a: {:#b}, reg_b: {:#b}, reg_c: {:#b}", opcode, reg_a, reg_b, reg_c);
+            *counter += 1;
 
-        match Opcode::from_u32(opcode) {
-            Some(Opcode::CMov) => if registers[reg_c] != 0 {registers[reg_a] = cmov(registers[reg_b])},
-            Some(Opcode::SegLoad) => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], mem),
-            Some(Opcode::SegStore) => seg_store(registers[reg_a], registers[reg_b], registers[reg_c], mem),
-            Some(Opcode::Add) => registers[reg_a] = add(registers[reg_b], registers[reg_c]),
-            Some(Opcode::Mult) => registers[reg_a] = mult(registers[reg_b], registers[reg_c]),
-            Some(Opcode::Div) => if registers[reg_c] != 0 {registers[reg_a] = div(registers[reg_b], registers[reg_c])},
-            Some(Opcode::BitNAND) => registers[reg_a] = bit_nand(registers[reg_b], registers[reg_c]),
-            Some(Opcode::Halt) => halt(),
-            Some(Opcode::MapSeg) => registers[reg_b] = map_seg(registers[reg_c], mem),
-            Some(Opcode::UnmapSeg) => unmap_seg(registers[reg_c], mem),
-            Some(Opcode::Output) => output_opp(registers[reg_c], output),
-            Some(Opcode::Input) => input_opp(&stdin, &mut registers[reg_c]),
-            Some(Opcode::LoadProg) => load_prog(registers[reg_b], registers[reg_c], mem, &mut registers, counter),
-            Some(Opcode::LoadVal) => load_val(&mut registers[reg_a], program[*counter - 1]),
-            None => panic!("Unknown opcode: {}", opcode),
+            println!("opcode: {}, registers: {:?}, counter: {}", opcode, registers, *counter);
+            match Opcode::from_u32(opcode) {
+                Some(Opcode::CMov) => if registers[reg_c] != 0 {registers[reg_a] = cmov(registers[reg_b])},
+                Some(Opcode::SegLoad) => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], segment_manager),
+                Some(Opcode::SegStore) => seg_store(registers[reg_a], registers[reg_b], registers[reg_c], segment_manager),
+                Some(Opcode::Add) => registers[reg_a] = add(registers[reg_b], registers[reg_c]),
+                Some(Opcode::Mult) => registers[reg_a] = mult(registers[reg_b], registers[reg_c]),
+                Some(Opcode::Div) => if registers[reg_c] != 0 {registers[reg_a] = div(registers[reg_b], registers[reg_c])},
+                Some(Opcode::BitNAND) => registers[reg_a] = bit_nand(registers[reg_b], registers[reg_c]),
+                Some(Opcode::Halt) => halt(),
+                Some(Opcode::MapSeg) => registers[reg_b] = map_seg(registers[reg_c], segment_manager),
+                Some(Opcode::UnmapSeg) => unmap_seg(registers[reg_c], segment_manager),
+                Some(Opcode::Output) => output_opp(registers[reg_c], output),
+                Some(Opcode::Input) => input_opp(&stdin, &mut registers[reg_c]),
+                Some(Opcode::LoadProg) => load_prog(registers[reg_b], registers[reg_c], segment_manager, &mut registers, counter),
+                Some(Opcode::LoadVal) => (),
+                None => panic!("Unknown opcode: {}", opcode),
+            }
         }
     }
 }
@@ -166,17 +251,22 @@ fn main() {
     let input = env::args().nth(1);
     let program_data = rumload::load(input.as_deref());
 
-    // let program = parse_program(&program_data);
-    let mut mem: Vec<Vec<u32>> = vec![program_data.clone()];
+    // Initialize the SegmentManager and create the initial segment for the program
+    let mut segment_manager = SegmentManager::new();
+    let program_id = segment_manager.allocate_segment(program_data.len());
+    if let Some(program_segment) = segment_manager.get_segment_mut(program_id) {
+        program_segment.memory = program_data.clone();
+    }
 
     let mut counter = 0;
     execute_program(
         program_data,
-        &mut mem,
+        &mut segment_manager,
         &io::stdin(),
         &mut io::stdout(),
         &mut counter,
     );
 }
+
 
 
