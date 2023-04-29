@@ -6,10 +6,16 @@ use rum::rumload;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+// static mut instruction_counter: i32 = 0;
+
+//! Represents a memory segment with a vector of u32 values.
 #[derive(Debug)]
 pub struct Segment {
     pub memory: Vec<u32>,
 }
+
+//! Manages memory segments, allocating and deallocating segment IDs.
+//! Uses a HashMap to store segments and a Vec to store unmapped segment IDs.
 #[derive(Debug)]
 pub struct SegmentManager {
     segments: HashMap<u32, Segment>,
@@ -18,6 +24,11 @@ pub struct SegmentManager {
 }
 
 impl SegmentManager {
+    //! Creates a new SegmentManager instance.
+    //!
+    //! # Returns
+    //!
+    //! A new instance of SegmentManager.
     pub fn new() -> Self {
         SegmentManager {
             segments: HashMap::new(),
@@ -26,6 +37,15 @@ impl SegmentManager {
         }
     }
 
+    //! Allocates a new memory segment with the specified size and returns its ID.
+    //!
+    //! # Arguments
+    //!
+    //! * `size` - A usize representing the number of memory cells in the segment.
+    //!
+    //! # Returns
+    //!
+    //! A u32 integer representing the segment ID.
     pub fn allocate_segment(&mut self, size: usize) -> u32 {
         let id = if let Some(reused_id) = self.unmapped_ids.pop() {
             reused_id
@@ -37,16 +57,32 @@ impl SegmentManager {
         id
     }
 
+    //! Deallocates the memory segment with the specified ID.
+    //!
+    //! # Arguments
+    //!
+    //! * `id` - A u32 integer representing the segment ID to deallocate.
     pub fn deallocate_segment(&mut self, id: u32) {
         if self.segments.remove(&id).is_some() {
             self.unmapped_ids.push(id);
         }
     }
 
+    //! Retrieves a mutable reference to the memory segment with the specified ID.
+    //!
+    //! # Arguments
+    //!
+    //! * `id` - A u32 integer representing the segment ID.
+    //!
+    //! # Returns
+    //!
+    //! An Option containing a mutable reference to the `Segment` if the ID is valid,
+    //! or None if the ID is not found.
     pub fn get_segment_mut(&mut self, id: u32) -> Option<&mut Segment> {
         self.segments.get_mut(&id)
     }
 }
+
 
 
 
@@ -90,10 +126,23 @@ impl Opcode {
 }
 
 
+//! Copies the value in `b` and returns it.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer containing the value to be copied
 fn cmov(b: u32) -> u32 {
     return b;
 }
 
+//! Loads the value in the memory cell `c` of the segment `b` and returns it.
+//! If the segment is not mapped or `c` is out of bounds, it panics with an error message.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer representing the segment ID
+//! * `c` - A u32 integer representing the memory cell index
+//! * `segment_manager` - A mutable reference to a SegmentManager instance
 fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
     if let Some(segment) = segment_manager.get_segment_mut(b) {
         if c as usize >= segment.memory.len() {
@@ -104,7 +153,16 @@ fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
         panic!("Error: Segmented load with unmapped segment");
     }
 }
-
+//! Stores the value `c` in the memory cell `b` of the segment `a`.
+//! If the segment is not mapped or `b` is out of bounds, it panics with an error message.
+//!
+//! # Arguments
+//!
+//! * `a` - A u32 integer representing the segment ID
+//! * `b` - A u32 integer representing the memory cell index
+//! * `c` - A u32 integer containing the value to store
+//! * `segment_manager` - A mutable reference to a SegmentManager instance
+//!
 fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
     if let Some(segment) = segment_manager.get_segment_mut(a) {
         if b as usize >= segment.memory.len() {
@@ -116,31 +174,68 @@ fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
     }
 }
 
-
+//! Adds `b` and `c` and returns the result.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer
+//! * `c` - A u32 integer
 fn add(b: u32, c: u32) -> u32 {
     return b.wrapping_add(c);
 }
 
+//! Multiplies `b` and `c` and returns the result.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer
+//! * `c` - A u32 integer
 fn mult(b: u32, c: u32) -> u32 {
     return b.wrapping_mul(c);
 }
 
+//! Divides `b` by `c` and returns the result.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer
+//! * `c` - A u32 integer
 fn div(b: u32, c: u32) -> u32 {
     return b / c;
 }
 
+//! Performs a bitwise NAND operation on `b` and `c` and returns the result.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer
+//! * `c` - A u32 integer
 fn bit_nand(b: u32, c: u32) -> u32 {
     return !(b & c);
 }
 
+//! This function terminates the program.
 fn halt() {
     std::process::exit(0);
 }
 
+//! Creates a new segment with `c` memory cells and returns its ID.
+//!
+//! # Arguments
+//!
+//! * `c` - A u32 integer representing the number of memory cells
+//! * `segment_manager` - A mutable reference to a SegmentManager instance
 fn map_seg(c: u32, segment_manager: &mut SegmentManager) -> u32 {
     segment_manager.allocate_segment(c as usize)
 }
 
+//! Deallocates the segment with ID `c`.
+//! If `c` is 0 or the segment is not mapped, it panics with an error message.
+//!
+//! # Arguments
+//!
+//! * `c` - A u32 integer representing the segment ID
+//! * `segment_manager` - A mutable reference to a SegmentManager instance
 fn unmap_seg(c: u32, segment_manager: &mut SegmentManager) {
     if c == 0 {
         panic!("Error: Attempt to unmap $m[0]");
@@ -151,6 +246,13 @@ fn unmap_seg(c: u32, segment_manager: &mut SegmentManager) {
     segment_manager.deallocate_segment(c);
 }
 
+//! Writes the value `c` to the standard output stream.
+//! If `c` is not a valid ASCII character, it prints an error message to the console.
+//!
+//! # Arguments
+//!
+//! * `c` - A u32 integer representing the ASCII value of the character to output
+//! * `stdout` - A mutable reference to a dyn io::Write implementation (typically stdout)
 fn output_opp(c: u32, stdout: &mut dyn io::Write) {
     if c <= 255 {
         stdout.write(&[c as u8]).unwrap();
@@ -159,6 +261,14 @@ fn output_opp(c: u32, stdout: &mut dyn io::Write) {
     }
 }
 
+//! Reads a single byte from the standard input stream and stores it in `c`.
+//! If the input stream is empty, it stores `u32::MAX` in `c`.
+//! If an error occurs, it prints an error message to the console and stores `u32::MAX` in `c`. 
+//!
+//! # Arguments
+//!
+//! * `input_iter` - A mutable reference to a std::io::Bytes instance created from StdinLock
+//! * `c` - A mutable reference to a u32 integer where the input value will be stored
 fn input_opp(input_iter: &mut std::io::Bytes<std::io::StdinLock<'_>>, c: &mut u32) {
     match input_iter.next() {
         Some(Ok(byte)) => {
@@ -174,6 +284,17 @@ fn input_opp(input_iter: &mut std::io::Bytes<std::io::StdinLock<'_>>, c: &mut u3
     }
 }
 
+//! Loads the program stored in segment `b` into segment 0 and sets the counter to `c`.
+//! If the segment is not mapped, it panics with an error message.
+//! Essentially a jump command.
+//!
+//! # Arguments
+//!
+//! * `b` - A u32 integer representing the segment ID containing the program to load
+//! * `c` - A u32 integer representing the new program counter value
+//! * `segment_manager` - A mutable reference to a SegmentManager instance
+//! * `_registers` - A mutable reference to an array of 8 u32 registers (currently unused)
+//! * `counter` - A mutable reference to a usize representing the program counter
 fn load_prog(
     b: u32,
     c: u32,
@@ -196,9 +317,13 @@ fn load_prog(
     }
 }
 
-
-
-
+//! Executes the given UM program, interacting with standard input and output as necessary.
+//! # Arguments
+//!
+//! * `segment_manager` - A mutable reference to the `SegmentManager` managing the memory segments of the program.
+//! * `_input` - A reference to the standard input stream.
+//! * `output` - A mutable reference to the standard output stream.
+//! * `counter` - A mutable reference to the program counter.
 fn execute_program(
     segment_manager: &mut SegmentManager,
     _input: &dyn io::Read,
@@ -211,6 +336,7 @@ fn execute_program(
     let mut input_iter = stdin.lock().bytes();
 
     loop {
+        // unsafe {instruction_counter += 1;}
         // println!("current word is {:#b}", segment_manager.get_segment_mut(0).unwrap().memory[*counter]);
         let opcode = segment_manager.get_segment_mut(0).unwrap().memory[*counter] >> 28;
         if opcode == 13{
@@ -251,6 +377,7 @@ fn main() {
     let program_data = rumload::load(input.as_deref());
 
     // Initialize the SegmentManager and create the initial segment for the program
+    // m[0][0] = program_data
     let mut segment_manager = SegmentManager::new();
     let program_id = segment_manager.allocate_segment(program_data.len());
     if let Some(program_segment) = segment_manager.get_segment_mut(program_id) {
