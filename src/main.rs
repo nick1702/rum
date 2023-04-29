@@ -1,6 +1,5 @@
 use std::env;
-use std::io;
-use num::pow;
+use std::io::{self, Read};
 
 use rum::rumload;
 
@@ -160,26 +159,20 @@ fn output_opp(c: u32, stdout: &mut dyn io::Write) {
     }
 }
 
-fn input_opp(stdin: &io::Stdin, c: &mut u32) {
-    let mut input = String::new();
-    stdin.read_line(&mut input).unwrap();
-    if let Some('\n') = input.chars().next_back() {
-        input.pop();
-    }
-    if let Some('\r') = input.chars().next_back() {
-        input.pop();
-    }
-    if let Some(ch) = input.chars().next() {
-        let num = ch as u32;
-        if num <= 255 {
-            *c = num;
+fn input_opp(input_iter: &mut std::io::Bytes<std::io::StdinLock<'_>>, c: &mut u32) {
+    match input_iter.next() {
+        Some(Ok(byte)) => {
+            *c = byte as u32;
         }
-        else{
-            *c = 4294967295     //Is this right?
+        Some(Err(e)) => {
+            eprintln!("Error reading input: {}", e);
+            *c = u32::MAX;
+        }
+        None => {
+            *c = u32::MAX;
         }
     }
 }
-
 
 fn load_prog(
     b: u32,
@@ -215,6 +208,7 @@ fn execute_program(
 
     let mut registers: [u32; 8] = [0; 8];
     let stdin = io::stdin();
+    let mut input_iter = stdin.lock().bytes();
 
     loop {
         // println!("current word is {:#b}", segment_manager.get_segment_mut(0).unwrap().memory[*counter]);
@@ -242,7 +236,7 @@ fn execute_program(
                 Some(Opcode::MapSeg) => registers[reg_b] = map_seg(registers[reg_c], segment_manager),
                 Some(Opcode::UnmapSeg) => unmap_seg(registers[reg_c], segment_manager),
                 Some(Opcode::Output) => output_opp(registers[reg_c], output),
-                Some(Opcode::Input) => input_opp(&stdin, &mut registers[reg_c]),
+                Some(Opcode::Input) => input_opp(&mut input_iter, &mut registers[reg_c]),
                 Some(Opcode::LoadProg) => load_prog(registers[reg_b], registers[reg_c], segment_manager, &mut registers, counter),
                 Some(Opcode::LoadVal) => (),
                 None => panic!("Unknown opcode: {}", opcode),
