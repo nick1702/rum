@@ -6,11 +6,11 @@ use rum::rumload;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-
+#[derive(Debug)]
 pub struct Segment {
     pub memory: Vec<u32>,
 }
-
+#[derive(Debug)]
 pub struct SegmentManager {
     segments: HashMap<u32, Segment>,
     unmapped_ids: Vec<u32>,
@@ -187,44 +187,48 @@ fn load_prog(
     _registers: &mut [u32; 8],
     counter: &mut usize,
 ) {
-    let source_segment_memory = {
-        let source_segment = segment_manager.get_segment_mut(b).unwrap();
-        source_segment.memory.clone()
-    };
+    if let Some(source_segment) = segment_manager.get_segment_mut(b) {
+        let source_segment_memory = source_segment.memory.clone();
 
-    if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
-        zero_segment.memory = source_segment_memory;
+        if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
+            zero_segment.memory = source_segment_memory;
+        }
+
+        *counter = c as usize;
+    } else {
+        // Handle the error case when the segment is not mapped
+        eprintln!("Error: Attempt to load program from an unmapped segment");
+        std::process::exit(1);
     }
-
-    *counter = segment_manager.get_segment_mut(0).unwrap().memory[c as usize] as usize;
 }
 
 
 
+
 fn execute_program(
-    program: Vec<u32>,
     segment_manager: &mut SegmentManager,
     _input: &dyn io::Read,
     output: &mut dyn io::Write,
     counter: &mut usize,
 ) {
+
     let mut registers: [u32; 8] = [0; 8];
     let stdin = io::stdin();
 
-    while *counter < program.len() {
-        // println!("current word is {:#b}", program[*counter]);
-        let opcode = program[*counter] >> 28;
+    loop {
+        // println!("current word is {:#b}", segment_manager.get_segment_mut(0).unwrap().memory[*counter]);
+        let opcode = segment_manager.get_segment_mut(0).unwrap().memory[*counter] >> 28;
         if opcode == 13{
-            registers[((program[*counter] << 4) >> 29) as usize] = (program[*counter] << 7) >> 7;
+            registers[((segment_manager.get_segment_mut(0).unwrap().memory[*counter] << 4) >> 29) as usize] = (segment_manager.get_segment_mut(0).unwrap().memory[*counter] << 7) >> 7;
             *counter += 1;
         } else {
-            let reg_a = ((program[*counter] >> 6) & 7) as usize;
-            let reg_b = ((program[*counter] >> 3) & 7) as usize;
-            let reg_c = (program[*counter] & 7) as usize;
+            let reg_a = ((segment_manager.get_segment_mut(0).unwrap().memory[*counter] >> 6) & 7) as usize;
+            let reg_b = ((segment_manager.get_segment_mut(0).unwrap().memory[*counter] >> 3) & 7) as usize;
+            let reg_c = (segment_manager.get_segment_mut(0).unwrap().memory[*counter] & 7) as usize;
             // println!("opcode: {:#b}, reg_a: {:#b}, reg_b: {:#b}, reg_c: {:#b}", opcode, reg_a, reg_b, reg_c);
+
             *counter += 1;
 
-            println!("opcode: {}, registers: {:?}, counter: {}", opcode, registers, *counter);
             match Opcode::from_u32(opcode) {
                 Some(Opcode::CMov) => if registers[reg_c] != 0 {registers[reg_a] = cmov(registers[reg_b])},
                 Some(Opcode::SegLoad) => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], segment_manager),
@@ -257,10 +261,8 @@ fn main() {
     if let Some(program_segment) = segment_manager.get_segment_mut(program_id) {
         program_segment.memory = program_data.clone();
     }
-
     let mut counter = 0;
     execute_program(
-        program_data,
         &mut segment_manager,
         &io::stdin(),
         &mut io::stdout(),
