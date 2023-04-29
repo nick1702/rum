@@ -1,5 +1,6 @@
 use std::env;
 use std::io;
+use num::pow;
 
 use rum::rumload;
 
@@ -118,11 +119,11 @@ fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
 
 
 fn add(b: u32, c: u32) -> u32 {
-    return b + c;
+    return (b + c) % pow(2, 32);
 }
 
 fn mult(b: u32, c: u32) -> u32 {
-    return b * c;
+    return (b * c) % pow(2, 32);
 }
 
 fn div(b: u32, c: u32) -> u32 {
