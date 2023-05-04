@@ -6,9 +6,6 @@ use rum::rumload;
 use rum::memory::*;
 
 
-// static mut instruction_counter: i32 = 0;
-
-
 
 enum Opcode {
   CMov = 0,
