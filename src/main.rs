@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, mem};
 use std::io::{self, Read};
 
 use rum::rumload;
@@ -224,10 +224,11 @@ fn load_prog(
     counter: &mut usize,
 ) {
     if let Some(source_segment) = segment_manager.get_segment_mut(b) {
-        let source_segment_memory = source_segment.memory.clone();
+        let mut source_segment_memory = Vec::new();
+        mem::swap(&mut source_segment_memory, &mut source_segment.memory);
 
         if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
-            zero_segment.memory = source_segment_memory;
+            mem::swap(&mut zero_segment.memory, &mut source_segment_memory);
         }
 
         *counter = c as usize;
