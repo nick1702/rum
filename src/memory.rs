@@ -74,18 +74,4 @@ impl SegmentManager {
     pub fn get_segment_mut(&mut self, id: u32) -> Option<&mut Segment> {
         self.segments.get_mut(&id)
     }
-
-    /// Retrieves a immutable reference to the memory segment with the specified ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - A u32 integer representing the segment ID.
-    ///
-    /// # Returns
-    ///
-    /// An Option containing a mutable reference to the `Segment` if the ID is valid,
-    /// or None if the ID is not found.
-    pub fn get_segment(&mut self, id: u32) -> Option<&Segment> {
-        self.segments.get(&id)
-    }
 }
