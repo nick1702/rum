@@ -65,7 +65,7 @@ fn cmov(b: u32) -> u32 {
 /// * `c` - A u32 integer representing the memory cell index
 /// * `segment_manager` - A mutable reference to a SegmentManager instance
 fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
-    if let Some(segment) = segment_manager.get_segment(b) {
+    if let Some(segment) = segment_manager.get_segment_mut(b) {
         if c as usize >= segment.memory.len() {
             panic!("Error: Segmented load out of bounds");
         }
@@ -258,17 +258,16 @@ fn execute_program(
     let mut input_iter = stdin.lock().bytes();
 
     loop {
-        // unsafe {instruction_counter += 1;}
-        // println!("current word is {:#b}", segment_manager.get_segment_mut(0).unwrap().memory[*counter]);
-        let opcode = segment_manager.get_segment(0).unwrap().memory[*counter] >> 28;
+
+        let word = segment_manager.get_segment_mut(0).unwrap().memory[*counter];
+        let opcode = word >> 28;
         if opcode == 13{
-            registers[((segment_manager.get_segment(0).unwrap().memory[*counter] << 4) >> 29) as usize] = (segment_manager.get_segment(0).unwrap().memory[*counter] << 7) >> 7;
+            registers[((word << 4) >> 29) as usize] = (word << 7) >> 7;
             *counter += 1;
         } else {
-            let reg_a = ((segment_manager.get_segment(0).unwrap().memory[*counter] >> 6) & 7) as usize;
-            let reg_b = ((segment_manager.get_segment(0).unwrap().memory[*counter] >> 3) & 7) as usize;
-            let reg_c = (segment_manager.get_segment(0).unwrap().memory[*counter] & 7) as usize;
-            // println!("opcode: {:#b}, reg_a: {:#b}, reg_b: {:#b}, reg_c: {:#b}", opcode, reg_a, reg_b, reg_c);
+            let reg_a = ((word >> 6) & 7) as usize;
+            let reg_b = ((word >> 3) & 7) as usize;
+            let reg_c = (word & 7) as usize;
 
             *counter += 1;
 
