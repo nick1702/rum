@@ -7,46 +7,6 @@ use rum::memory::*;
 
 
 
-enum Opcode {
-  CMov = 0,
-  SegLoad = 1,
-  SegStore = 2,
-  Add = 3,
-  Mult = 4,
-  Div = 5,
-  BitNAND = 6,
-  Halt = 7,
-  MapSeg = 8,
-  UnmapSeg = 9,
-  Output = 10,
-  Input = 11,
-  LoadProg = 12,
-  LoadVal = 13,
-}
-
-impl Opcode {
-  fn from_u32(value: u32) -> Option<Self> {
-      match value {
-          0 => Some(Opcode::CMov),
-          1 => Some(Opcode::SegLoad),
-          2 => Some(Opcode::SegStore),
-          3 => Some(Opcode::Add),
-          4 => Some(Opcode::Mult),
-          5 => Some(Opcode::Div),
-          6 => Some(Opcode::BitNAND),
-          7 => Some(Opcode::Halt),
-          8 => Some(Opcode::MapSeg),
-          9 => Some(Opcode::UnmapSeg),
-          10 => Some(Opcode::Output),
-          11 => Some(Opcode::Input),
-          12 => Some(Opcode::LoadProg),
-          13 => Some(Opcode::LoadVal),
-          _ => None,
-      }
-  }
-}
-
-
 /// Copies the value in `b` and returns it.
 ///
 /// # Arguments
@@ -284,30 +244,30 @@ fn execute_program(
 
             *counter += 1;
 
-            match Opcode::from_u32(opcode) {
-                Some(Opcode::CMov) => {
+            match opcode {
+                0 => {
                     if registers[reg_c] != 0 {
                         registers[reg_a] = cmov(registers[reg_b])
                     }
                 }
-                Some(Opcode::SegLoad) => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], segment_manager),
-                Some(Opcode::SegStore) => seg_store(registers[reg_a], registers[reg_b], registers[reg_c], segment_manager),
-                Some(Opcode::Add) => registers[reg_a] = add(registers[reg_b], registers[reg_c]),
-                Some(Opcode::Mult) => registers[reg_a] = mult(registers[reg_b], registers[reg_c]),
-                Some(Opcode::Div) => {
+                1 => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], segment_manager),
+                2 => seg_store(registers[reg_a], registers[reg_b], registers[reg_c], segment_manager),
+                3 => registers[reg_a] = add(registers[reg_b], registers[reg_c]),
+                4 => registers[reg_a] = mult(registers[reg_b], registers[reg_c]),
+                5 => {
                     if registers[reg_c] != 0 {
                         registers[reg_a] = div(registers[reg_b], registers[reg_c])
                     }
                 }
-                Some(Opcode::BitNAND) => registers[reg_a] = bit_nand(registers[reg_b], registers[reg_c]),
-                Some(Opcode::Halt) => halt(),
-                Some(Opcode::MapSeg) =>registers[reg_b] = map_seg(registers[reg_c], segment_manager),
-                Some(Opcode::UnmapSeg) => unmap_seg(registers[reg_c], segment_manager),
-                Some(Opcode::Output) => output_opp(registers[reg_c], output),
-                Some(Opcode::Input) => input_opp(&mut input_iter, &mut registers[reg_c]),
-                Some(Opcode::LoadProg) => load_prog(registers[reg_b], registers[reg_c], segment_manager, &mut registers, counter),
-                Some(Opcode::LoadVal) => (),
-                None => panic!("Unknown opcode: {}", opcode),
+                6 => registers[reg_a] = bit_nand(registers[reg_b], registers[reg_c]),
+                7 => halt(),
+                8 =>registers[reg_b] = map_seg(registers[reg_c], segment_manager),
+                9 => unmap_seg(registers[reg_c], segment_manager),
+                10 => output_opp(registers[reg_c], output),
+                11 => input_opp(&mut input_iter, &mut registers[reg_c]),
+                12 => load_prog(registers[reg_b], registers[reg_c], segment_manager, &mut registers, counter),
+                13 => (),
+                _ => panic!("Unknown opcode: {}", opcode),
             }
         }
     }
