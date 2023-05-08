@@ -37,14 +37,15 @@ impl SegmentManager {
             reused_id
         } else {
             let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
+            if self.segments.capacity() == self.segments.len() {
+                self.segments.reserve(self.segments.len()); // Double the capacity of segments
+            }
             self.segments.push(Vec::new());
             next_id
         };
 
-        let segment_size = self.segments[id as usize].len();
         let segment = &mut self.segments[id as usize];
-        if size > segment_size {
-            segment.reserve(size - segment_size);
+        if segment.len() != size {
             segment.resize(size, 0);
         }
 
@@ -57,7 +58,12 @@ impl SegmentManager {
     ///
     /// * `id` - A u32 integer representing the segment ID to deallocate.
     pub fn deallocate_segment(&mut self, id: u32) {
-        self.segments[id as usize] = Vec::new();
+        let segment = &mut self.segments[id as usize];
+        segment.clear();
+        segment.shrink_to_fit();
+        if self.unmapped_ids.capacity() == self.unmapped_ids.len() {
+            self.unmapped_ids.reserve(self.unmapped_ids.len()); // Double the capacity of unmapped_ids
+        }
         self.unmapped_ids.push(id);
     }
 
