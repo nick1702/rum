@@ -66,15 +66,17 @@ fn cmov(b: u32) -> u32 {
 /// * `c` - A u32 integer representing the memory cell index
 /// * `segment_manager` - A mutable reference to a SegmentManager instance
 #[inline]
-fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
-    if let Some(segment) = segment_manager.get_segment_mut(b) {
-        if c as usize >= segment.memory.len() {
-            panic!("Error: Segmented load out of bounds");
-        }
-        segment.memory[c as usize]
-    } else {
+fn seg_load(a: u32, b: u32, segment_manager: &mut SegmentManager) -> u32 {
+    if a as usize >= segment_manager.segments.len() {
         panic!("Error: Segmented load with unmapped segment");
     }
+
+    let segment = &segment_manager.segments[a as usize];
+    if b as usize >= segment.len() {
+        panic!("Error: Segmented load out of bounds");
+    }
+
+    segment[b as usize]
 }
 /// Stores the value `c` in the memory cell `b` of the segment `a`.
 /// If the segment is not mapped or `b` is out of bounds, it panics with an error message.
@@ -89,10 +91,10 @@ fn seg_load(b: u32, c: u32, segment_manager: &mut SegmentManager) -> u32 {
 #[inline]
 fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
     if let Some(segment) = segment_manager.get_segment_mut(a) {
-        if b as usize >= segment.memory.len() {
+        if b as usize >= segment.len() {
             panic!("Error: Segmented store out of bounds");
         }
-        segment.memory[b as usize] = c;
+        segment[b as usize] = c;
     } else {
         panic!("Error: Segmented store with unmapped segment");
     }
@@ -170,11 +172,13 @@ fn unmap_seg(c: u32, segment_manager: &mut SegmentManager) {
     if c == 0 {
         panic!("Error: Attempt to unmap $m[0]");
     }
-    if !segment_manager.segments.contains_key(&c) {
-        panic!("Error: Attempt to unmap an unmapped segment");
+    if c >= segment_manager.segments.len() as u32 {
+    panic!("Error: Attempt to unmap an invalid segment");
     }
     segment_manager.deallocate_segment(c);
 }
+
+
 
 /// Writes the value `c` to the standard output stream.
 /// If `c` is not a valid ASCII character, it prints an error message to the console.
@@ -234,11 +238,10 @@ fn load_prog(
     counter: &mut usize,
 ) {
     if let Some(source_segment) = segment_manager.get_segment_mut(b) {
-        let mut source_segment_memory = Vec::new();
-        mem::swap(&mut source_segment_memory, &mut source_segment.memory);
+        let mut source_segment_memory = source_segment.clone();
 
         if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
-            mem::swap(&mut zero_segment.memory, &mut source_segment_memory);
+            mem::swap(zero_segment, &mut source_segment_memory);
         }
 
         *counter = c as usize;
@@ -248,6 +251,7 @@ fn load_prog(
         std::process::exit(1);
     }
 }
+
 
 /// Executes the given UM program, interacting with standard input and output as necessary.
 /// # Arguments
@@ -262,16 +266,14 @@ fn execute_program(
     output: &mut dyn io::Write,
     counter: &mut usize,
 ) {
-
     let mut registers: [u32; 8] = [0; 8];
     let stdin = io::stdin();
     let mut input_iter = stdin.lock().bytes();
 
     loop {
-
-        let word = segment_manager.get_segment_mut(0).unwrap().memory[*counter];
+        let word = segment_manager.get_segment_mut(0).unwrap()[*counter];
         let opcode = word >> 28;
-        if opcode == 13{
+        if opcode == 13 {
             registers[((word << 4) >> 29) as usize] = (word << 7) >> 7;
             *counter += 1;
         } else {
@@ -282,15 +284,23 @@ fn execute_program(
             *counter += 1;
 
             match Opcode::from_u32(opcode) {
-                Some(Opcode::CMov) => if registers[reg_c] != 0 {registers[reg_a] = cmov(registers[reg_b])},
+                Some(Opcode::CMov) => {
+                    if registers[reg_c] != 0 {
+                        registers[reg_a] = cmov(registers[reg_b])
+                    }
+                }
                 Some(Opcode::SegLoad) => registers[reg_a] = seg_load(registers[reg_b], registers[reg_c], segment_manager),
                 Some(Opcode::SegStore) => seg_store(registers[reg_a], registers[reg_b], registers[reg_c], segment_manager),
                 Some(Opcode::Add) => registers[reg_a] = add(registers[reg_b], registers[reg_c]),
                 Some(Opcode::Mult) => registers[reg_a] = mult(registers[reg_b], registers[reg_c]),
-                Some(Opcode::Div) => if registers[reg_c] != 0 {registers[reg_a] = div(registers[reg_b], registers[reg_c])},
+                Some(Opcode::Div) => {
+                    if registers[reg_c] != 0 {
+                        registers[reg_a] = div(registers[reg_b], registers[reg_c])
+                    }
+                }
                 Some(Opcode::BitNAND) => registers[reg_a] = bit_nand(registers[reg_b], registers[reg_c]),
                 Some(Opcode::Halt) => halt(),
-                Some(Opcode::MapSeg) => registers[reg_b] = map_seg(registers[reg_c], segment_manager),
+                Some(Opcode::MapSeg) =>registers[reg_b] = map_seg(registers[reg_c], segment_manager),
                 Some(Opcode::UnmapSeg) => unmap_seg(registers[reg_c], segment_manager),
                 Some(Opcode::Output) => output_opp(registers[reg_c], output),
                 Some(Opcode::Input) => input_opp(&mut input_iter, &mut registers[reg_c]),
@@ -302,7 +312,6 @@ fn execute_program(
     }
 }
 
-
 fn main() {
     let input = env::args().nth(1);
     let program_data = rumload::load(input.as_deref());
@@ -312,7 +321,7 @@ fn main() {
     let mut segment_manager = SegmentManager::new();
     let program_id = segment_manager.allocate_segment(program_data.len());
     if let Some(program_segment) = segment_manager.get_segment_mut(program_id) {
-        program_segment.memory = program_data.clone();
+        *program_segment = program_data.clone();
     }
     let mut counter = 0;
     execute_program(
