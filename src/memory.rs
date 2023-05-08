@@ -18,7 +18,7 @@ impl SegmentManager {
     pub fn new() -> Self {
         SegmentManager {
             segments: Vec::new(),
-            unmapped_ids: Vec::with_capacity(16), // Preallocate memory for unmapped_ids
+            unmapped_ids: Vec::new(),
             next_id: AtomicU32::new(0),
         }
     }
@@ -33,21 +33,23 @@ impl SegmentManager {
     ///
     /// A u32 integer representing the segment ID.
     pub fn allocate_segment(&mut self, size: usize) -> u32 {
-    let id = if let Some(reused_id) = self.unmapped_ids.pop() {
-        reused_id
-    } else {
-        let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        self.segments.push(Vec::new());
-        next_id
-    };
+        let id = if let Some(reused_id) = self.unmapped_ids.pop() {
+            reused_id
+        } else {
+            let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
+            self.segments.push(Vec::new());
+            next_id
+        };
 
-    let segment = &mut self.segments[id as usize];
-    if segment.len() != size {
-        segment.resize(size, 0); // Call resize only if the sizes are different
+        let segment_size = self.segments[id as usize].len();
+        let segment = &mut self.segments[id as usize];
+        if size > segment_size {
+            segment.reserve(size - segment_size);
+            segment.resize(size, 0);
+        }
+
+        id
     }
-
-    id
-}
 
     /// Deallocates the memory segment with the specified ID.
     ///
@@ -55,9 +57,7 @@ impl SegmentManager {
     ///
     /// * `id` - A u32 integer representing the segment ID to deallocate.
     pub fn deallocate_segment(&mut self, id: u32) {
-        let segment = &mut self.segments[id as usize];
-        segment.clear(); // Clear the segment first
-        segment.shrink_to_fit(); // Shrink the segment to fit its current length
+        self.segments[id as usize] = Vec::new();
         self.unmapped_ids.push(id);
     }
 
