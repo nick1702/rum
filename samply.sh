@@ -2,4 +2,4 @@
 
 cargo build --release 
 
-samply record ./target/release/rum rum-binaries/midmark.um
+samply record ./target/release/rum rum-binaries/sandmark.umz
