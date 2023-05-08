@@ -40,7 +40,14 @@ impl SegmentManager {
             self.segments.push(Vec::new());
             next_id
         };
-        self.segments[id as usize] = vec![0; size];
+
+        let segment_size = self.segments[id as usize].len();
+        let segment = &mut self.segments[id as usize];
+        if size > segment_size {
+            segment.reserve(size - segment_size);
+            segment.resize(size, 0);
+        }
+
         id
     }
 
