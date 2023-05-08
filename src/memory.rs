@@ -18,7 +18,7 @@ impl SegmentManager {
     pub fn new() -> Self {
         SegmentManager {
             segments: Vec::new(),
-            unmapped_ids: Vec::new(),
+            unmapped_ids: Vec::with_capacity(16), // Preallocate memory for unmapped_ids
             next_id: AtomicU32::new(0),
         }
     }
@@ -33,24 +33,21 @@ impl SegmentManager {
     ///
     /// A u32 integer representing the segment ID.
     pub fn allocate_segment(&mut self, size: usize) -> u32 {
-        let id = if let Some(reused_id) = self.unmapped_ids.pop() {
-            reused_id
-        } else {
-            let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
-            if self.segments.capacity() == self.segments.len() {
-                self.segments.reserve(self.segments.len()); // Double the capacity of segments
-            }
-            self.segments.push(Vec::new());
-            next_id
-        };
+    let id = if let Some(reused_id) = self.unmapped_ids.pop() {
+        reused_id
+    } else {
+        let next_id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        self.segments.push(Vec::new());
+        next_id
+    };
 
-        let segment = &mut self.segments[id as usize];
-        if segment.len() != size {
-            segment.resize(size, 0);
-        }
-
-        id
+    let segment = &mut self.segments[id as usize];
+    if segment.len() != size {
+        segment.resize(size, 0); // Call resize only if the sizes are different
     }
+
+    id
+}
 
     /// Deallocates the memory segment with the specified ID.
     ///
@@ -59,11 +56,8 @@ impl SegmentManager {
     /// * `id` - A u32 integer representing the segment ID to deallocate.
     pub fn deallocate_segment(&mut self, id: u32) {
         let segment = &mut self.segments[id as usize];
-        segment.clear();
-        segment.shrink_to_fit();
-        if self.unmapped_ids.capacity() == self.unmapped_ids.len() {
-            self.unmapped_ids.reserve(self.unmapped_ids.len()); // Double the capacity of unmapped_ids
-        }
+        segment.clear(); // Clear the segment first
+        segment.shrink_to_fit(); // Shrink the segment to fit its current length
         self.unmapped_ids.push(id);
     }
 
