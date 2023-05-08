@@ -52,6 +52,7 @@ impl Opcode {
 /// # Arguments
 ///
 /// * `b` - A u32 integer containing the value to be copied
+#[inline]
 fn cmov(b: u32) -> u32 {
     return b;
 }
@@ -64,6 +65,7 @@ fn cmov(b: u32) -> u32 {
 /// * `b` - A u32 integer representing the segment ID
 /// * `c` - A u32 integer representing the memory cell index
 /// * `segment_manager` - A mutable reference to a SegmentManager instance
+#[inline]
 fn seg_load(a: u32, b: u32, segment_manager: &mut SegmentManager) -> u32 {
     if a as usize >= segment_manager.segments.len() {
         panic!("Error: Segmented load with unmapped segment");
@@ -86,6 +88,7 @@ fn seg_load(a: u32, b: u32, segment_manager: &mut SegmentManager) -> u32 {
 /// * `c` - A u32 integer containing the value to store
 /// * `segment_manager` - A mutable reference to a SegmentManager instance
 ///
+#[inline]
 fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
     if let Some(segment) = segment_manager.get_segment_mut(a) {
         if b as usize >= segment.len() {
@@ -103,6 +106,7 @@ fn seg_store(a: u32, b: u32, c: u32, segment_manager: &mut SegmentManager) {
 ///
 /// * `b` - A u32 integer
 /// * `c` - A u32 integer
+#[inline]
 fn add(b: u32, c: u32) -> u32 {
     return b.wrapping_add(c);
 }
@@ -113,6 +117,7 @@ fn add(b: u32, c: u32) -> u32 {
 ///
 /// * `b` - A u32 integer
 /// * `c` - A u32 integer
+#[inline]
 fn mult(b: u32, c: u32) -> u32 {
     return b.wrapping_mul(c);
 }
@@ -123,6 +128,7 @@ fn mult(b: u32, c: u32) -> u32 {
 ///
 /// * `b` - A u32 integer
 /// * `c` - A u32 integer
+#[inline]
 fn div(b: u32, c: u32) -> u32 {
     return b / c;
 }
@@ -133,11 +139,13 @@ fn div(b: u32, c: u32) -> u32 {
 ///
 /// * `b` - A u32 integer
 /// * `c` - A u32 integer
+#[inline]
 fn bit_nand(b: u32, c: u32) -> u32 {
     return !(b & c);
 }
 
 /// This function terminates the program.
+#[inline]
 fn halt() {
     std::process::exit(0);
 }
@@ -148,6 +156,7 @@ fn halt() {
 ///
 /// * `c` - A u32 integer representing the number of memory cells
 /// * `segment_manager` - A mutable reference to a SegmentManager instance
+#[inline]
 fn map_seg(c: u32, segment_manager: &mut SegmentManager) -> u32 {
     segment_manager.allocate_segment(c as usize)
 }
@@ -194,6 +203,7 @@ fn output_opp(c: u32, stdout: &mut dyn io::Write) {
 ///
 /// * `input_iter` - A mutable reference to a std::io::Bytes instance created from StdinLock
 /// * `c` - A mutable reference to a u32 integer where the input value will be stored
+#[inline]
 fn input_opp(input_iter: &mut std::io::Bytes<std::io::StdinLock<'_>>, c: &mut u32) {
     match input_iter.next() {
         Some(Ok(byte)) => {
