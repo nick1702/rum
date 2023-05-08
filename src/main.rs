@@ -238,7 +238,8 @@ fn load_prog(
     counter: &mut usize,
 ) {
     if let Some(source_segment) = segment_manager.get_segment_mut(b) {
-        let mut source_segment_memory = source_segment.clone();
+        let mut source_segment_memory = Vec::new();
+        mem::swap(source_segment, &mut source_segment_memory);
 
         if let Some(zero_segment) = segment_manager.get_segment_mut(0) {
             mem::swap(zero_segment, &mut source_segment_memory);
